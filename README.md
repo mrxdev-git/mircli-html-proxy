@@ -100,6 +100,12 @@ You can run headful Chrome on a server without a desktop using a virtual X serve
      node index.js https://mircli.ru -- --headless=false --timeout=30000 --wait=1500 --out=mircli.html
    ```
 
+   Or use the convenience npm script (forwards args after `--`):
+
+   ```bash
+   npm run headful:vps -- https://mircli.ru --timeout=30000 --wait=1500 --out=mircli.html
+   ```
+
 1. Manual Xvfb session (if you need more control)
 
    ```bash
