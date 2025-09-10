@@ -118,6 +118,8 @@ async function main() {
   const proxy = argv.proxy;
   const userDataDir = argv.userdata;
   const netMode = argv.net;
+  let parsedUrl;
+  try { parsedUrl = new URL(url); } catch { parsedUrl = null; }
 
   const execPath = await detectChrome();
 
@@ -212,6 +214,15 @@ async function main() {
       userAgentMetadata: uaDesktop.uaMeta
     });
     await client.send('Emulation.setLocaleOverride', { locale: 'ru-RU' });
+    // Realistic headers to match locale/UA
+    try {
+      await client.send('Network.setExtraHTTPHeaders', {
+        headers: {
+          'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Upgrade-Insecure-Requests': '1'
+        }
+      });
+    } catch {}
     await client.send('Emulation.setTimezoneOverride', { timezoneId: 'Europe/Chisinau' });
     await client.send('Emulation.setCPUThrottlingRate', { rate: 1 }); // no throttle
 
@@ -253,8 +264,23 @@ async function main() {
         await page.goto(url, { waitUntil: 'domcontentloaded' });
         navError = null;
       } catch (e2) {
-        console.error('Navigation failed for URL (after retry):', url, e2?.message || e2);
-        throw e2;
+        console.warn('Second navigation attempt failed:', e2?.message || e2);
+        // Fallback: try www.<host> if original was apex and not already www
+        if (parsedUrl && !parsedUrl.hostname.startsWith('www.')) {
+          const alt = new URL(parsedUrl.href);
+          alt.hostname = `www.${parsedUrl.hostname}`;
+          try {
+            console.log('Retrying with www host:', alt.href);
+            await page.goto(alt.href, { waitUntil: 'domcontentloaded' });
+            navError = null;
+          } catch (e3) {
+            console.error('Navigation failed for URL (after www fallback):', alt.href, e3?.message || e3);
+            throw e3;
+          }
+        } else {
+          console.error('Navigation failed for URL (after retry):', url, e2?.message || e2);
+          throw e2;
+        }
       }
     }
     console.timeEnd('navigate');
