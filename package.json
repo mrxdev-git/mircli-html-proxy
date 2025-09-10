@@ -1,0 +1,19 @@
+{
+  "name": "mircli-cdp-grabber",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "node index.js",
+    "grab": "node index.js https://mircli.ru"
+  },
+  "dependencies": {
+    "chrome-launcher": "^1.1.1",
+    "puppeteer": "^24.19.0",
+    "puppeteer-core": "^23.7.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "yargs": "^17.7.2"
+  }
+}
