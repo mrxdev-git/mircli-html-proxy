@@ -6,7 +6,8 @@
   "license": "MIT",
   "scripts": {
     "start": "node index.js",
-    "grab": "node index.js https://mircli.ru"
+    "grab": "node index.js https://mircli.ru",
+    "headful:vps": "xvfb-run -a --server-args=\"-screen 0 1440x900x24\" node index.js --headless=false"
   },
   "dependencies": {
     "chrome-launcher": "^1.1.1",
