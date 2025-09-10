@@ -20,6 +20,7 @@ const argv = yargs(hideBin(process.argv))
   .option('wait', { type: 'number', default: 7_000, describe: 'Extra settle wait (ms) after network idle' })
   .option('out', { type: 'string', default: 'mircli.html' })
   .option('stayopen', { type: 'boolean', default: false, describe: 'Keep browser open after saving (headful only)' })
+  .option('net', { type: 'string', choices: ['compat','auto'], default: 'compat', describe: 'Network mode: compat (Linux-friendly: disables HTTP/2/QUIC, uses OS trust store) | auto (no changes)' })
   .help().argv;
 
 // ---------- Stealth & hardening ----------
@@ -116,6 +117,7 @@ async function main() {
   const headless = argv.headless === 'true' ? true : (argv.headless === 'new' ? 'new' : false);
   const proxy = argv.proxy;
   const userDataDir = argv.userdata;
+  const netMode = argv.net;
 
   const execPath = await detectChrome();
 
@@ -136,7 +138,8 @@ async function main() {
     '--autoplay-policy=no-user-gesture-required',
     '--enable-features=NetworkService,NetworkServiceInProcess',
     '--force-webrtc-ip-handling-policy=default_public_interface_only',
-    '--disable-dev-shm-usage'
+    '--disable-dev-shm-usage',
+    '--disable-gpu'
   ];
 
   if (proxy) chromeArgs.push(`--proxy-server=${proxy}`);
@@ -144,8 +147,14 @@ async function main() {
   // VPS hardening:
   // - Some providers/middleboxes break HTTP/2; disabling HTTP/2/QUIC avoids net::ERR_HTTP2_PROTOCOL_ERROR
   // - If running as root, Chrome sandbox will cause issues unless we disable it
-  if (process.platform === 'linux') {
-    chromeArgs.push('--disable-http2', '--disable-quic', '--disable-features=ChromeRootStoreUsed');
+  if (process.platform === 'linux' && netMode === 'compat') {
+    chromeArgs.push(
+      '--disable-http2',
+      '--disable-quic',
+      '--disable-ipv6',
+      '--disable-features=ChromeRootStoreUsed,UseDnsHttpsSvcb,EnableDnsHttpsSvcb',
+      '--ignore-certificate-errors'
+    );
     if (typeof process.getuid === 'function' && process.getuid() === 0) {
       chromeArgs.push('--no-sandbox', '--disable-setuid-sandbox');
     }
@@ -160,6 +169,7 @@ async function main() {
     defaultViewport: null,
     dumpio: true,
     protocolTimeout: argv.timeout,
+    ignoreHTTPSErrors: true,
     ignoreDefaultArgs: [
       // keep as real as possible; don’t strip too much
       '--enable-automation' // puppeteer will add it; stealth handles mitigation
@@ -182,6 +192,15 @@ async function main() {
     });
     page.on('dialog', async dialog => {
       try { await dialog.dismiss(); } catch {}
+    });
+    page.on('requestfailed', req => {
+      try { console.warn('Request failed:', req.url(), req.failure()?.errorText || ''); } catch {}
+    });
+    page.on('response', res => {
+      try {
+        const s = res.status();
+        if (s >= 400) console.warn('Bad response:', s, res.url());
+      } catch {}
     });
 
     // Locale/UA-CH setup through CDP
@@ -220,11 +239,23 @@ async function main() {
 
     console.log('Navigating to', url);
     console.time('navigate');
+    let navError;
     try {
       await page.goto(url, { waitUntil: 'domcontentloaded' });
     } catch (e) {
-      console.error('Navigation failed for URL:', url, e?.message || e);
-      throw e;
+      navError = e;
+      console.warn('First navigation attempt failed:', e?.message || e);
+    }
+    if (navError) {
+      // Retry once after a short delay; transient network handshakes (HTTP/2/IPv6/CDN) can fail once
+      await new Promise(r => setTimeout(r, 500));
+      try {
+        await page.goto(url, { waitUntil: 'domcontentloaded' });
+        navError = null;
+      } catch (e2) {
+        console.error('Navigation failed for URL (after retry):', url, e2?.message || e2);
+        throw e2;
+      }
     }
     console.timeEnd('navigate');
 
