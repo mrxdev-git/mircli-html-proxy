@@ -23,6 +23,7 @@ node index.js --url=https://mircli.ru -- --headless=true --out=mircli.html
 ```
 
 The script writes:
+
 - An early snapshot right after DOMContentLoaded (fast guarantee).
 - A final snapshot after a very short quiet period (overwrites the early file).
 
@@ -38,6 +39,7 @@ The script writes:
 - `--stayopen` (boolean): Keep the browser open after saving (useful in headful). Default: `false`.
 
 Examples:
+
 ```bash
 # Minimal
 node index.js https://example.com
@@ -76,3 +78,52 @@ node index.js https://example.com -- --headless=false --stayopen=true
 - If you see `Target closed` or `disconnected`, the early snapshot ensures you still get an output. Re-run with `--headless=false` to observe the page.
 - Use `--stayopen=true` to inspect the final state before exit.
 - Check console logs printed by the script for site-side errors or anti-bot challenges.
+
+## Headful on a Linux VPS (no GUI) — Ubuntu 22.04/22.04.4 LTS
+
+You can run headful Chrome on a server without a desktop using a virtual X server (Xvfb).
+
+1. Install system dependencies
+
+   ```bash
+   sudo apt-get update && sudo apt-get install -y \
+     xvfb xauth x11-apps \
+     libnss3 libnspr4 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 \
+     libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 \
+     libgtk-3-0 libasound2 fonts-liberation libu2f-udev xdg-utils libvulkan1 ca-certificates
+   ```
+
+1. Fastest way (xvfb-run wrapper)
+
+   ```bash
+   xvfb-run -a --server-args="-screen 0 1440x900x24" \
+     node index.js https://mircli.ru -- --headless=false --timeout=30000 --wait=1500 --out=mircli.html
+   ```
+
+1. Manual Xvfb session (if you need more control)
+
+   ```bash
+   Xvfb :99 -screen 0 1440x900x24 &
+   export DISPLAY=:99
+
+   node index.js https://mircli.ru -- --headless=false --timeout=30000 --wait=1500 --out=mircli.html
+
+   # when done
+   killall Xvfb || true
+   ```
+
+Tips:
+
+- If you hit Chromium sandbox errors on VPS kernels, enable user namespaces:
+
+  ```bash
+  sudo sysctl -w kernel.unprivileged_userns_clone=1
+  ```
+
+  Persist across reboots:
+
+  ```bash
+  echo 'kernel.unprivileged_userns_clone=1' | sudo tee /etc/sysctl.d/99-chrome.conf
+  sudo sysctl --system
+  ```
+- Alternatively, you can add `--no-sandbox` to Chrome args in `index.js` (less secure). Look for `chromeArgs` and append it there.
