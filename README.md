@@ -79,6 +79,23 @@ node index.js https://example.com -- --headless=false --stayopen=true
 - Use `--stayopen=true` to inspect the final state before exit.
 - Check console logs printed by the script for site-side errors or anti-bot challenges.
 
+- HTTP/2 protocol error on some VPS (`net::ERR_HTTP2_PROTOCOL_ERROR`):
+
+  - The script disables HTTP/2 and QUIC on Linux by default to avoid middlebox/CDN quirks.
+  - Ensure CA bundle is present: `sudo apt-get install -y ca-certificates && sudo update-ca-certificates`.
+  - If you customized Chrome flags, add `--disable-http2 --disable-quic`.
+
+- DBus/dconf permission warnings when running as root:
+
+  - These are benign in Xvfb environments without a user session.
+  - Prefer running as a non-root user, or set `XDG_RUNTIME_DIR`:
+
+    ```bash
+    export XDG_RUNTIME_DIR=/tmp/runtime-$(id -u)
+    mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
+    ```
+  - When running as root, the script auto-adds `--no-sandbox --disable-setuid-sandbox` to Chrome.
+
 ## Headful on a Linux VPS (no GUI) — Ubuntu 22.04/22.04.4 LTS
 
 You can run headful Chrome on a server without a desktop using a virtual X server (Xvfb).

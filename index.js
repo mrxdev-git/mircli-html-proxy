@@ -141,6 +141,16 @@ async function main() {
 
   if (proxy) chromeArgs.push(`--proxy-server=${proxy}`);
 
+  // VPS hardening:
+  // - Some providers/middleboxes break HTTP/2; disabling HTTP/2/QUIC avoids net::ERR_HTTP2_PROTOCOL_ERROR
+  // - If running as root, Chrome sandbox will cause issues unless we disable it
+  if (process.platform === 'linux') {
+    chromeArgs.push('--disable-http2', '--disable-quic', '--disable-features=ChromeRootStoreUsed');
+    if (typeof process.getuid === 'function' && process.getuid() === 0) {
+      chromeArgs.push('--no-sandbox', '--disable-setuid-sandbox');
+    }
+  }
+
   console.time('launch');
   const browser = await puppeteer.launch({
     headless,
